@@ -26,7 +26,9 @@ func (s Status) isError() bool {
 }
 
 // StatusError is returned when LoopiaAPI answers with a status other than OK.
-// Use [errors.Is] with the Err* variables to check for a specific status.
+// Use [errors.Is] with the Err* variables to check for a specific status;
+// ErrAuth, ErrRateLimited and ErrInsufficientFunds also match the equivalent
+// [FaultError].
 type StatusError struct {
 	Status Status
 }
@@ -85,8 +87,25 @@ func (e *FaultError) Error() string {
 	return fmt.Sprintf("loopia: fault %d: %s", e.Code, e.Message)
 }
 
-// Is reports whether target is a *FaultError with the same code.
+// faultStatus maps fault codes to the status with the same meaning. LoopiaAPI
+// reports some problems either way; invalid credentials, for example, come
+// back as fault 401 rather than AUTH_ERROR.
+var faultStatus = map[int]Status{
+	FaultUnauthorized:      StatusAuthError,
+	FaultRateLimited:       StatusRateLimited,
+	FaultInsufficientFunds: StatusInsufficientFunds,
+}
+
+// Is reports whether target is a *FaultError with the same code, or a
+// *StatusError with the same meaning, so that errors.Is(err, ErrAuth) also
+// matches fault 401.
 func (e *FaultError) Is(target error) bool {
-	t, ok := target.(*FaultError)
-	return ok && t.Code == e.Code
+	switch t := target.(type) {
+	case *FaultError:
+		return t.Code == e.Code
+	case *StatusError:
+		s, ok := faultStatus[e.Code]
+		return ok && s == t.Status
+	}
+	return false
 }

@@ -44,8 +44,7 @@ func ExampleStatusError() {
 	switch {
 	case errors.Is(err, loopia.ErrAuth):
 		fmt.Println("check your LoopiaAPI credentials")
-	case errors.Is(err, loopia.ErrRateLimited),
-		errors.Is(err, &loopia.FaultError{Code: loopia.FaultRateLimited}):
+	case errors.Is(err, loopia.ErrRateLimited):
 		fmt.Println("slow down: at most 60 calls per minute")
 	case err != nil:
 		log.Fatal(err)

@@ -42,10 +42,16 @@ Both work with `errors.Is`:
 switch {
 case errors.Is(err, loopia.ErrAuth):
 	// wrong username or password
-case errors.Is(err, &loopia.FaultError{Code: loopia.FaultRateLimited}):
+case errors.Is(err, loopia.ErrRateLimited):
 	// more than 60 calls per minute
+case errors.Is(err, &loopia.FaultError{Code: loopia.FaultDomainNotAvailable}):
+	// a specific fault code
 }
 ```
+
+Loopia reports some problems either as a status or as a fault (invalid
+credentials come back as fault 401, not `AUTH_ERROR`), so `ErrAuth`,
+`ErrRateLimited` and `ErrInsufficientFunds` match both forms.
 
 ### Options
 

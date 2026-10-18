@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -171,6 +172,45 @@ func TestFaultError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "429") {
 		t.Errorf("Error() = %q, want fault code", err.Error())
+	}
+}
+
+func TestFaultMatchesEquivalentStatus(t *testing.T) {
+	tests := []struct {
+		code    int
+		want    error
+		notWant error
+	}{
+		// Loopia answers invalid credentials with fault 401 rather than
+		// AUTH_ERROR, as seen against the live API.
+		{FaultUnauthorized, ErrAuth, ErrRateLimited},
+		{FaultRateLimited, ErrRateLimited, ErrAuth},
+		{FaultInsufficientFunds, ErrInsufficientFunds, ErrAuth},
+	}
+	for _, tt := range tests {
+		t.Run(strconv.Itoa(tt.code), func(t *testing.T) {
+			c, _ := newFake(t, fault{Code: tt.code, Message: "fault"})
+			_, err := c.GetSubdomains(context.Background(), "example.com")
+			if !errors.Is(err, tt.want) {
+				t.Errorf("errors.Is(err, %v) = false, err = %v", tt.want, err)
+			}
+			if errors.Is(err, tt.notWant) {
+				t.Errorf("errors.Is(err, %v) = true", tt.notWant)
+			}
+			if !errors.Is(err, &FaultError{Code: tt.code}) {
+				t.Error("no longer matches its own fault code")
+			}
+		})
+	}
+}
+
+func TestFaultWithoutStatusEquivalent(t *testing.T) {
+	c, _ := newFake(t, fault{Code: FaultDomainNotAvailable, Message: "The domain is not available."})
+	err := c.OrderDomain(context.Background(), "example.com", true)
+	for _, sentinel := range []error{ErrAuth, ErrDomainOccupied, ErrRateLimited, ErrBadIndata, ErrUnknown, ErrInsufficientFunds} {
+		if errors.Is(err, sentinel) {
+			t.Errorf("fault 40001 matched %v", sentinel)
+		}
 	}
 }
 
